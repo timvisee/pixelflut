@@ -1,7 +1,10 @@
 
 #include "util.h"
+#include <stdint.h>
+#include <netinet/in.h>
+#include <string.h>
 
-static int sockaddr_eq(struct sockaddr_storage *a, struct sockaddr_storage *b) {
+int sockaddr_eq(struct sockaddr_storage *a, struct sockaddr_storage *b) {
     if(a->ss_family == AF_INET6 && b->ss_family == AF_INET6) {
         uint8_t * x = ((struct sockaddr_in6 *) a)->sin6_addr.s6_addr;
         uint8_t * y = ((struct sockaddr_in6 *) b)->sin6_addr.s6_addr;
