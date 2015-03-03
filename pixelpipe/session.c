@@ -68,7 +68,9 @@ void session_setcb(struct session *s,
   s->errorcb = errorcb;
 }
 
-void session_connect(struct session *s, evutil_socket_t sockfd, struct sockaddr_storage *addr) {
+void session_connect(struct session *s,
+                     evutil_socket_t sockfd,
+                     struct sockaddr_storage *addr) {
     evutil_make_socket_nonblocking(sockfd);
     s->mode = SESSION_ALIVE;
     s->buff_event = bufferevent_socket_new(s->event_base, sockfd, BEV_OPT_CLOSE_ON_FREE);
@@ -120,6 +122,11 @@ void session_free(struct session * s) {
         s->next->prev = s->prev;
     s->prev->next = s->next;
 
+    if (s->freecb)
+      s->freecb(s);
+    else if(s->user != NULL)
+      free(s->user);
+
     if (s->buff_event != NULL)
         bufferevent_free(s->buff_event);
 
@@ -128,8 +135,40 @@ void session_free(struct session * s) {
 
     free(s);
     session_count--;
-    printf("free: %d\n", session_count);
 };
 
+/* Takes ownership over the char array. Refcount starts with 1. You MUST call
+    session_decref() on the returned struct at some time, otherwise it will never
+    be deleted. 
+*/
+struct refcounted* session_make_refcount(char *data, int len) {
+  struct refcounted* ref = calloc(1, sizeof(struct refcounted));
+  ref->refs = 1;
+  ref->size = len;
+  ref->data = data;
+  return ref;
+};
 
+static void _session_cleanup_refc(const void *data, size_t datalen, void *extra) {
+  struct refcounted *ref = (struct refcounted*) extra;
+  session_decref(ref);
+}
+
+void session_decref(struct refcounted *ref) {
+  ref->refs--;
+  if(ref->refs==0) {
+    free(ref->data);
+    free(ref);
+  }
+}
+
+void session_send_ref(struct session * s, struct refcounted * ref) {
+  if(s->mode == SESSION_ALIVE) {
+    struct evbuffer *output = bufferevent_get_output(s->buff_event);
+    if(evbuffer_add_reference(output, ref->data, ref->size,
+                              _session_cleanup_refc, ref) == 0) {
+      ref->refs++;
+    }
+  } 
+};
 

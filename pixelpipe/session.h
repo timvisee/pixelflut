@@ -20,6 +20,8 @@ struct session {
     void(*readcb)(struct session *);
     void(*writecb)(struct session *);
     void(*errorcb)(struct session *, short);
+    void(*freecb)(struct session *);
+    void * user;
     struct sockaddr_storage *addr;
     struct bufferevent *buff_event;
     struct event_base *event_base;
@@ -28,6 +30,12 @@ struct session {
 
 struct sink {
     struct bufferevent *buff_event;
+};
+
+struct refcounted {
+    unsigned int refs;
+    char * data;
+    unsigned int size;
 };
 
 struct session session_head;
@@ -41,5 +49,11 @@ void session_setcb(struct session *s,
                    void(*writecb)(struct session *),
                    void(*errorcb)(struct session *, short));
 void session_error(struct session * s, char* msg);
-void session_close(struct session *s);
+void session_close(struct session * s);
 void session_free(struct session * s);
+
+struct refcounted* session_make_refcount(char *str, int len);
+void session_decref(struct refcounted * ref);
+void session_send_ref(struct session * s, struct refcounted *ref);
+
+
