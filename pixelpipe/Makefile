@@ -1,12 +1,14 @@
-ACC=gcc
-CFLAGS=-Wall
+CC=gcc
+CFLAGS=-Wall -MMD
 LDFLAGS=-levent
 
 TARGET := pixelpipe
-OBJS := session.o main.o
+OBJS := util.o session.o main.o
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
+-include *.d
+
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET) *.o *.d
