@@ -3,7 +3,7 @@ CFLAGS=-Wall
 LDFLAGS=-levent
 
 TARGET := pixelpipe
-OBJS := main.o
+OBJS := session.o main.o
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
