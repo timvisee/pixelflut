@@ -24,6 +24,18 @@ void on_read(struct session *s) {
     output = bufferevent_get_output(s->buff_event);
 
     while ((line = evbuffer_readln(input, &n, EVBUFFER_EOL_LF))) {
+        unsigned int y,x,m,c,t1,t2;
+        m = sscanf(line, "PX %u %u %n%8x%n", &x, &y, &t1, &c, &t2);
+        if(m == 2) {
+            printf("R %d %d",x,y);
+        } else if(m == 3 && t2-t1 == 6) {
+            c |= 0xff000000;
+            printf("PX %u %u %x",x,y,c);
+        } else if(m == 3 && t2-t1 == 8) {
+            // #rrggbbaa -> #aarrggbb
+            c = (c >> 8) + ((c & 0xff) << 24); 
+            printf("PX %d %d %x",x,y,c);
+        }
         evbuffer_add(output, line, n);
         evbuffer_add(output, "\n", 1);
         free(line);
@@ -42,8 +54,8 @@ void on_error(struct session *s, short error) {
     if (error & BEV_EVENT_EOF) {
     } else if (error & BEV_EVENT_ERROR) {
     } else if (error & BEV_EVENT_TIMEOUT) {
+        session_error(s, "Timeout");
     }
-    session_close(s);
 }
 
 void on_accept(evutil_socket_t listener, short event, void *arg) {
