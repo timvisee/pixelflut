@@ -1,9 +1,9 @@
 #include "session.h"
 
+static const struct timeval DEAD_TIMEOUT = {.tv_sec = 10, .tv_usec = 0};
 static const struct timeval READ_TIMEOUT = {.tv_sec = 60, .tv_usec = 0};
 struct session session_head = {.next=NULL};
 unsigned int session_count = 0; 
-
 
 static void on_read(struct bufferevent *bev, void *ctx) {
     struct session *s = (struct session *) ctx;
@@ -13,15 +13,18 @@ static void on_read(struct bufferevent *bev, void *ctx) {
 }
 
 static void on_write(struct bufferevent *bev, void *ctx) {
-    printf("writeeee\n");
+    struct session *s = (struct session *) ctx;
+    if(s->writecb != NULL) {
+        (s->writecb)(s);
+    }
 }
 
 static void on_event(struct bufferevent *bev, short error, void *ctx) {
-    if (error & BEV_EVENT_EOF) {
-    } else if (error & BEV_EVENT_ERROR) {
-    } else if (error & BEV_EVENT_TIMEOUT) {
+    struct session *s = (struct session *) ctx;
+    if(s->errorcb != NULL) {
+        (s->errorcb)(s, error);
     }
-    session_close((struct session *) ctx);
+    session_close(s);
 }
 
 struct session* session_new(struct event_base * base) {
@@ -104,6 +107,7 @@ void session_close(struct session *s) {
         bufferevent_disable(s->buff_event, EV_READ);
         bufferevent_flush(s->buff_event, EV_WRITE, BEV_FINISHED);
         bufferevent_setcb(s->buff_event, NULL, dead_write, dead_event, s);
+        bufferevent_set_timeouts(s->buff_event, &DEAD_TIMEOUT, &DEAD_TIMEOUT);
         dead_write(s->buff_event, s);
     }
 }
