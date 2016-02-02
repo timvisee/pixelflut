@@ -57,6 +57,8 @@ public class PixelServer extends ChannelHandlerAdapter {
 									128, Delimiters.lineDelimiter()));
 							p.addLast("decoder", new StringDecoder());
 							p.addLast("encoder", new StringEncoder());
+							// p.addLast("shaper",
+							// new PixelClientHandler.MessageShaper());
 							// and then business logic.
 							p.addLast("handler", new PixelClientHandler(canvas));
 						}

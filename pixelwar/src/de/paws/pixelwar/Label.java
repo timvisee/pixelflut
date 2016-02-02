@@ -1,7 +1,9 @@
 package de.paws.pixelwar;
 
 import java.awt.Color;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.geom.Rectangle2D;
 
 public class Label extends Drawable {
 
@@ -37,6 +39,13 @@ public class Label extends Drawable {
 		if (!show) {
 			return;
 		}
+
+		final FontMetrics fm = g.getFontMetrics();
+		final Rectangle2D rect = fm.getStringBounds(text, g);
+
+		g.setColor(Color.BLACK);
+		g.fillRect((int) x, (int) y - fm.getAscent(),
+				(int) rect.getWidth() + 2, (int) rect.getHeight() + 2);
 		g.setColor(Color.WHITE);
 		g.drawString(text, (int) x, (int) y);
 		g.drawLine((int) x, (int) y, x2, y2);

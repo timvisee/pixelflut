@@ -1,8 +1,12 @@
 package de.paws.pixelwar;
 
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.traffic.ChannelTrafficShapingHandler;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -11,6 +15,17 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 
 public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
+
+	public static class MessageShaper extends ChannelTrafficShapingHandler {
+		public MessageShaper() {
+			super(0, 1000, 1000);
+		}
+
+		@Override
+		protected long calculateSize(final Object msg) {
+			return 1;
+		}
+	}
 
 	public interface CommandHandler {
 		public void handle(PixelClientHandler client, String[] args);
@@ -24,6 +39,9 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 	private final Map<String, CommandHandler> handlers = new HashMap<>();
 
 	private Label label;
+	private boolean closed = false;
+
+	private long pxcount = 0;
 
 	public PixelClientHandler(final NetCanvas canvas) {
 		this.canvas = canvas;
@@ -36,9 +54,16 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 
 	@Override
 	public void channelActive(final ChannelHandlerContext ctx) throws Exception {
+
 		super.channelActive(ctx);
+
 		label = new Label();
-		label.setText(ctx.channel().remoteAddress().toString());
+		final SocketAddress raddr = ctx.channel().remoteAddress();
+		if (raddr instanceof InetSocketAddress) {
+			label.setText(((InetSocketAddress) raddr).getHostName());
+		} else {
+			label.setText(raddr.toString());
+		}
 		canvas.addDrawable(label);
 		channelContext = ctx;
 		synchronized (clients) {
@@ -50,6 +75,7 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 	public void channelInactive(final ChannelHandlerContext ctx)
 			throws Exception {
 		super.channelActive(ctx);
+		closed = true;
 		synchronized (clients) {
 			clients.remove(this);
 		}
@@ -58,9 +84,9 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 
 	public void writeIfPossible(final String str) {
 		if (channelContext.channel().isWritable()) {
-			channelContext.write(str + "\n");
-			channelContext.flush();
+			write(str);
 		} else {
+			// error("Client too slow");
 		}
 	}
 
@@ -71,12 +97,17 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 	}
 
 	public void write(final String str) {
-		channelContext.writeAndFlush(str + "\n");
+		if (!closed) {
+			channelContext.writeAndFlush(str + "\n");
+		}
 	}
 
 	public void error(final String msg) {
-		write("ERR " + msg + "\n");
-		channelContext.close();
+		if (!closed) {
+			channelContext.writeAndFlush("ERR " + msg + "\n").addListener(
+					ChannelFutureListener.CLOSE);
+		}
+		closed = true;
 	}
 
 	@Override
@@ -86,11 +117,11 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 		String command;
 		String data;
 		if (split == -1) {
-			command = msg.toUpperCase();
+			command = msg;
 			data = "";
 		} else {
-			command = msg.substring(0, split).toUpperCase();
-			data = msg.substring(split + 1).trim();
+			command = msg.substring(0, split);
+			data = msg.substring(split + 1);
 		}
 
 		switch (command) {
@@ -141,6 +172,15 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 		write("SUB " + StringUtils.join(subscriptions, " "));
 	}
 
+	private void publish(final String channel, final String data) {
+		final String message = "PUB " + channel.toLowerCase() + " "
+				+ data.trim();
+
+		for (final Object c : clients.toArray()) {
+			((PixelClientHandler) c).writeChannel(channel, message);
+		}
+	}
+
 	private void handle_PUB(final ChannelHandlerContext ctx, final String data) {
 		final String[] parts = data.split(" ", 2);
 		if (parts.length != 2) {
@@ -148,12 +188,7 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 			return;
 		}
 
-		final String channel = parts[0].toLowerCase();
-		final String message = "PUB " + channel + " " + parts[1].trim();
-
-		for (final PixelClientHandler c : clients) {
-			c.writeChannel(channel, message);
-		}
+		publish(parts[0], parts[1]);
 	}
 
 	private void handle_SIZE(final ChannelHandlerContext ctx, final String data) {
@@ -171,16 +206,27 @@ public class PixelClientHandler extends SimpleChannelInboundHandler<String> {
 				final int x = Integer.parseInt(args[0]);
 				final int y = Integer.parseInt(args[1]);
 				final int c = canvas.getPixel(x, y);
-				write(String.format("PX %d %d %06x", x, y, c));
+				writeIfPossible(String.format("PX %d %d %06x", x, y, c));
 			} else if (args.length == 3) {
+				pxcount++;
 				final int x = Integer.parseInt(args[0]);
 				final int y = Integer.parseInt(args[1]);
-				int color = (int) Long.parseLong(args[2], 16);
+				int color = 0;
 				if (args[2].length() == 6) {
-					color += 0xff000000;
+					color = (int) Long.parseLong(args[2], 16) + 0xff000000;
+				} else if (args[2].length() == 8) {
+					color = (int) Long.parseLong(args[2], 16);
+					color = (color >> 8) + ((color & 0xff) << 24);
+				} else {
+					error("Usage: PX x y [rrggbb[aa]]");
 				}
-				label.setPos(x, y);
-				canvas.setPixel(x, y, color);
+				if (x >= 0 && y >= 0) {
+					label.setPos(x, y);
+					if ((color & 0xff000000) != 0) {
+						canvas.setPixel(x, y, color);
+						publish("px", data);
+					}
+				}
 			} else {
 				error("Usage: PX x y [rrggbb[aa]]");
 			}
