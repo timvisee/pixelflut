@@ -56,4 +56,3 @@ struct refcounted* session_make_refcount(char *str, int len);
 void session_decref(struct refcounted * ref);
 void session_send_ref(struct session * s, struct refcounted *ref);
 
-

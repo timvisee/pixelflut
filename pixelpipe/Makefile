@@ -1,12 +1,12 @@
 CC=gcc
-CFLAGS=-Wall -MMD
-LDFLAGS=-levent
+CFLAGS= -O0 -Wall -MMD --debug 
+LDFLAGS=-levent -levent_pthreads -lGL -lGLEW -lSDL2 -pthread
 
 TARGET := pixelpipe
-OBJS := util.o session.o main.o
+OBJS := util.o session.o main.o net.o ui.o
 
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+$(TARGET): $(OBJS) Makefile
+	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
 
 -include *.d
 

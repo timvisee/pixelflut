@@ -142,33 +142,33 @@ void session_free(struct session * s) {
     be deleted. 
 */
 struct refcounted* session_make_refcount(char *data, int len) {
-  struct refcounted* ref = calloc(1, sizeof(struct refcounted));
-  ref->refs = 1;
-  ref->size = len;
-  ref->data = data;
-  return ref;
+    struct refcounted* ref = calloc(1, sizeof(struct refcounted));
+    ref->refs = 1;
+    ref->size = len;
+    ref->data = data;
+    return ref;
 };
 
 static void _session_cleanup_refc(const void *data, size_t datalen, void *extra) {
-  struct refcounted *ref = (struct refcounted*) extra;
-  session_decref(ref);
+    struct refcounted *ref = (struct refcounted*) extra;
+    session_decref(ref);
 }
 
 void session_decref(struct refcounted *ref) {
-  ref->refs--;
-  if(ref->refs==0) {
-    free(ref->data);
-    free(ref);
-  }
+    ref->refs--;
+    if(ref->refs==0) {
+        free(ref->data);
+        free(ref);
+    }
 }
 
 void session_send_ref(struct session * s, struct refcounted * ref) {
-  if(s->mode == SESSION_ALIVE) {
-    struct evbuffer *output = bufferevent_get_output(s->buff_event);
-    if(evbuffer_add_reference(output, ref->data, ref->size,
+    if(s->mode == SESSION_ALIVE) {
+        struct evbuffer *output = bufferevent_get_output(s->buff_event);
+        if(evbuffer_add_reference(output, ref->data, ref->size,
                               _session_cleanup_refc, ref) == 0) {
-      ref->refs++;
-    }
-  } 
+            ref->refs++;
+        }
+    } 
 };
 
