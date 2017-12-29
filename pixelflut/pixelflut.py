@@ -5,7 +5,7 @@ __version__ = '0.6'
 import time
 from gevent import spawn, sleep as gsleep, GreenletExit
 from gevent.socket import socket, SOL_SOCKET, SO_REUSEADDR
-from gevent.coros import Semaphore, RLock
+from gevent.lock import Semaphore, RLock
 from gevent.queue import Queue
 from collections import deque
 import pygame
@@ -23,7 +23,7 @@ async = spawn
 
 class Client(object):
     pps = 1000
-    
+
     def __init__(self, canvas):
         self.canvas = canvas
         self.socket = None
@@ -116,7 +116,7 @@ class Canvas(object):
         doptim = 1.0 / 30
         flip = pygame.display.flip
         getevents = pygame.event.get
-        
+
         while True:
             t1 = time.time()
 
@@ -196,7 +196,7 @@ class Canvas(object):
     def load_font(self, fname):
         ''' Load a font image with 16x16 sprites. '''
         self.font_img = pygame.image.load(fname).convert()
-        self.font_res = int(self.font_img.get_width())/16        
+        self.font_res = int(self.font_img.get_width())/16
 
     def set_title(self, text=None):
         title = 'P1XELFLUT'
@@ -239,10 +239,10 @@ if __name__ == '__main__':
 
     canvas = Canvas()
     task = spawn(canvas.serve, options.hostname, options.portnum)
-    
+
     brainfile = args[0]
     mtime = 0
-    
+
     while True:
         gsleep(1)
         if mtime < os.stat(brainfile).st_mtime:
@@ -255,6 +255,6 @@ if __name__ == '__main__':
                 continue
             canvas.fire('LOAD')
             mtime = os.stat(brainfile).st_mtime
-    
+
     task.join()
 
